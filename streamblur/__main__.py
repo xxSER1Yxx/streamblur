@@ -209,16 +209,19 @@ def cmd_doctor(_: argparse.Namespace) -> int:
     from .timings import _MODULE_IMPORT_ERRORS, list_providers
 
     settings = SettingsStore().load()
-    print(f"StreamBlur v{__version__}")
-    print(f"  python      : {sys.version.split()[0]}")
-    print(f"  данные      : {settings.data_dir}")
-    print(f"  база        : {settings.db_path} (фильмов: {Database(settings.db_path).count_films()})")
-    print(f"  mss (экран) : {'ok' if _MSS_OK else 'НЕТ — pip install mss'}")
-    print(f"  OCR         : {'ok' if _OCR_OK else 'НЕТ — pip install rapidocr-onnxruntime'}")
-    print(f"  провайдеры  : {', '.join(p.id for p in list_providers())}")
+    print(f"StreamBlur v{__version__}", flush=True)
+    print(f"  python      : {sys.version.split()[0]}", flush=True)
+    print(f"  данные      : {settings.data_dir}", flush=True)
+    print(f"  база        : {settings.db_path} "
+          f"(фильмов: {Database(settings.db_path).count_films()})", flush=True)
+    print(f"  mss (экран) : {'ok' if _MSS_OK else 'НЕТ — pip install mss'}", flush=True)
+    print(f"  OCR         : {'ok' if _OCR_OK else 'НЕТ — pip install rapidocr-onnxruntime'}",
+          flush=True)
+    print(f"  провайдеры  : {', '.join(p.id for p in list_providers())}", flush=True)
     if _MODULE_IMPORT_ERRORS:
         for name, error in _MODULE_IMPORT_ERRORS.items():
             print(f"    ! {name}: {error}")
+    print("  OBS         : проверяю связь…", flush=True)
     controller = BlurController(settings.obs)
     report = controller.diagnose()
     if report.get("ok"):
@@ -465,13 +468,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    # Жёсткое падение в нативной библиотеке (onnxruntime, cv2, mss) убивает
-    # процесс без всякого traceback. faulthandler успевает напечатать, где именно
-    # это произошло, — без него в логе просто пусто и код возврата 1.
-    import faulthandler
+def _install_crash_diagnostics() -> None:
+    """Сделать так, чтобы причина падения всегда оказывалась в логе.
 
-    faulthandler.enable()
+    Без этого при жёстком падении в нативной библиотеке (onnxruntime, cv2, mss)
+    процесс умирает молча: пустой stderr и код возврата 1 — и понять, что
+    случилось, невозможно. Именно так это выглядело в CI на Windows.
+    """
+    import faulthandler
+    import sys
+
+    try:
+        sys.stderr.reconfigure(line_buffering=True)
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:  # noqa: BLE001 — не все потоки это умеют
+        pass
+    # all_threads=True — дамп по всем потокам, а не только по упавшему.
+    faulthandler.enable(file=sys.stderr, all_threads=True)
+
+
+def main(argv: list[str] | None = None) -> int:
+    _install_crash_diagnostics()
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):

@@ -71,19 +71,16 @@ jobs:
       - name: Проверка, что EXE вообще запускается
         shell: pwsh
         run: |
-          # PYTHONUNBUFFERED=1 — иначе при перенаправлении в файл вывод буферизуется
-          # и при жёстком падении хвост теряется: в логе остаются только первые строки.
+          # Прямой вызов, а не Start-Process с перенаправлением в файлы:
+          # при аварийном завершении часть вывода в файлы не доезжала, и в логе
+          # оставались две строки вместо причины падения.
           $env:PYTHONUNBUFFERED = "1"
           $env:PYTHONFAULTHANDLER = "1"
-          $p = Start-Process -FilePath ".\dist\StreamBlur\StreamBlur.exe" -ArgumentList "doctor" `
-               -NoNewWindow -PassThru -RedirectStandardOutput out.txt -RedirectStandardError err.txt
-          $p.WaitForExit(120000) | Out-Null
-          Write-Host "--- код возврата: $($p.ExitCode) ---"
-          Write-Host "--- stdout ---"
-          if (Test-Path out.txt) { Get-Content out.txt }
-          Write-Host "--- stderr ---"
-          if (Test-Path err.txt) { Get-Content err.txt }
-          if ($p.ExitCode -ne 0) { exit 1 }
+          $out = & ".\dist\StreamBlur\StreamBlur.exe" doctor 2>&1
+          $code = $LASTEXITCODE
+          Write-Host "--- код возврата: $code ---"
+          $out | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) { exit 1 }
 
       - name: Версия из тега
         id: ver
