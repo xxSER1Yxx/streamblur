@@ -1,0 +1,18 @@
+{
+  "film": {
+    "title": "Пример: Ночной патруль",
+    "year": 2023,
+    "country": "США",
+    "studios": ["Example Pictures"],
+    "production_companies": ["Example Pictures", "Night Shift Films"],
+    "genres": ["триллер", "криминал"],
+    "runtime_minutes": 104
+  },
+  "segments": [
+    {"start": "0:07:12", "end": "0:08:40", "reason": "драка с кровью", "kind": "violence"},
+    {"start": "0:23:05", "end": "0:24:12", "reason": "обнажённая сцена", "kind": "nudity"},
+    {"start": "0:41:50", "end": "0:42:35", "reason": "жестокое насилие", "kind": "violence"},
+    {"start": "1:02:18", "end": "1:03:02", "reason": "сцена казни", "kind": "violence"},
+    {"start": "1:27:44", "end": "1:28:20", "reason": "откровенная сцена", "kind": "nudity"}
+  ]
+}

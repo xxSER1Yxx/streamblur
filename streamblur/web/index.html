@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StreamBlur — автоблюр фильма для OBS</title>
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#141824; --panel2:#1b2030; --line:#262d40;
+    --text:#e8ecf6; --muted:#8b93a8; --accent:#5b8cff; --ok:#2fbf71;
+    --warn:#f0b429; --bad:#ff4d5e; --blur:#a06bff;
+    /* всё, что раньше было вшито цветами, теперь переменные — иначе светлую
+       тему пришлось бы дублировать всей таблицей стилей */
+    --header1:#121728; --header2:#0d1018; --input:#0e1220;
+    --danger-bg:#3a1520; --danger-line:#5c2130; --danger-text:#ffb3bb;
+    --ok-bg:#123024; --ok-line:#1d4a37; --ok-text:#9ff0c4;
+    --panic-on:#111; --hover:#171c2b; --dash:#1e2434;
+    --tag-bg:#222a3d; --tag-on-bg:#3a1550; --tag-on-text:#d9b6ff;
+    --warn-bg:#2a2410; --warn-line:#4d4319; --warn-text:#ffd98a;
+    --seg:rgba(160,107,255,.45); --shadow:rgba(255,77,94,.4);
+    --playhead:#fff; --on-accent:#fff;
+  }
+  /* Светлая тема. Включается кнопкой в шапке, выбор запоминается в браузере. */
+  :root[data-theme="light"]{
+    --bg:#f2f4f9; --panel:#ffffff; --panel2:#eef1f7; --line:#d6dcea;
+    --text:#151a26; --muted:#5d6781; --accent:#2f66e0; --ok:#158a4f;
+    --warn:#a86a00; --bad:#d92d43; --blur:#7b3fe4;
+    --header1:#ffffff; --header2:#f0f3fa; --input:#ffffff;
+    --danger-bg:#fdeaec; --danger-line:#f2bcc4; --danger-text:#a3132a;
+    --ok-bg:#e4f6ea; --ok-line:#b9e2c8; --ok-text:#0d6b3d;
+    --panic-on:#ffffff; --hover:#f5f7fc; --dash:#e3e8f2;
+    --tag-bg:#e8ecf5; --tag-on-bg:#f0e6ff; --tag-on-text:#5b21b6;
+    --warn-bg:#fff5dc; --warn-line:#ecd49a; --warn-text:#7a4d00;
+    --seg:rgba(123,63,228,.28); --shadow:rgba(217,45,67,.35);
+    --playhead:#151a26; --on-accent:#ffffff;
+  }
+
+  /* Режим «Авто» — тема как в системе (Windows/браузер). Работает, пока
+     пользователь не выбрал тёмную тему явно: :root:not([data-theme="dark"]). */
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+    --bg:#f2f4f9; --panel:#ffffff; --panel2:#eef1f7; --line:#d6dcea;
+    --text:#151a26; --muted:#5d6781; --accent:#2f66e0; --ok:#158a4f;
+    --warn:#a86a00; --bad:#d92d43; --blur:#7b3fe4;
+    --header1:#ffffff; --header2:#f0f3fa; --input:#ffffff;
+    --danger-bg:#fdeaec; --danger-line:#f2bcc4; --danger-text:#a3133a;
+    --ok-bg:#e4f6ea; --ok-line:#b9e2c8; --ok-text:#0d6b3d;
+    --panic-on:#ffffff; --hover:#f5f7fc; --dash:#e3e8f2;
+    --tag-bg:#e8ecf5; --tag-on-bg:#f0e6ff; --tag-on-text:#5b21b6;
+    --warn-bg:#fff5dc; --warn-line:#ecd49a; --warn-text:#7a4d00;
+    --seg:rgba(123,63,228,.28); --shadow:rgba(217,45,67,.35);
+    --playhead:#151a26; --on-accent:#ffffff;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:14px/1.5 system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+  a{color:var(--accent)}
+  header{display:flex;align-items:center;gap:16px;padding:12px 18px;
+         background:linear-gradient(180deg,var(--header1),var(--header2));border-bottom:1px solid var(--line);
+         position:sticky;top:0;z-index:20;flex-wrap:wrap}
+  .logo{font-weight:800;letter-spacing:.4px;font-size:17px}
+  .logo span{color:var(--blur)}
+  .pills{display:flex;gap:8px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+        background:var(--panel2);border:1px solid var(--line);font-size:12px;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .dot.ok{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .dot.bad{background:var(--bad);box-shadow:0 0 8px var(--bad)}
+  .dot.warn{background:var(--warn)}
+  main{padding:18px;max-width:1400px;margin:0 auto}
+  nav.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+  nav.tabs button{background:var(--panel);border:1px solid var(--line);color:var(--muted);
+       padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px}
+  nav.tabs button.active{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+  .grid{display:grid;gap:14px}
+  .cols-2{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
+  .cols-3{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .card h2{margin:0 0 10px;font-size:15px;letter-spacing:.2px}
+  .card h3{margin:14px 0 6px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  .muted{color:var(--muted)}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;background:var(--input);border:1px solid var(--line);color:var(--text);
+        border-radius:8px;padding:8px 10px;font:inherit}
+  input[type=number]{width:120px}
+  textarea{min-height:70px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  button{background:var(--panel2);border:1px solid var(--line);color:var(--text);
+         padding:8px 14px;border-radius:9px;cursor:pointer;font:inherit}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+  button.danger{background:var(--danger-bg);border-color:var(--danger-line);color:var(--danger-text)}
+  button.ok{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok-text)}
+  button.big{font-size:16px;padding:14px 22px}
+  #panic{position:fixed;right:18px;bottom:18px;background:var(--bad);border:none;color:#fff;
+         font-weight:800;padding:18px 26px;border-radius:16px;box-shadow:0 10px 30px var(--shadow);
+         z-index:50;cursor:pointer;font-size:16px}
+  #panic.on{background:var(--panic-on);border:2px solid var(--bad);animation:pulse 1s infinite}
+  @keyframes pulse{50%{box-shadow:0 0 0 12px rgba(255,77,94,.12)}}
+  #blurbanner{display:none;margin-bottom:14px;padding:16px;border-radius:14px;text-align:center;
+        font-size:22px;font-weight:800;background:var(--blur);color:#fff;letter-spacing:1px}
+  #blurbanner.show{display:block;animation:pulse2 .8s infinite}
+  @keyframes pulse2{50%{opacity:.75}}
+  .bigclock{font-size:40px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:1px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px}
+  .kv b{color:var(--muted);font-weight:500}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+  tr:hover td{background:var(--hover)}
+  .log{max-height:280px;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  .log div{padding:3px 0;border-bottom:1px dashed var(--dash)}
+  .tag{display:inline-block;padding:1px 7px;border-radius:6px;font-size:11px;background:var(--tag-bg);color:var(--muted)}
+  .tag.on{background:var(--tag-on-bg);color:var(--tag-on-text)}
+  .tag.err{background:var(--danger-bg);color:var(--danger-text)}
+  .tag.ok{background:var(--ok-bg);color:var(--ok-text)}
+  .timeline{position:relative;height:54px;background:var(--input);border-radius:10px;overflow:hidden;
+            border:1px solid var(--line)}
+  .seg{position:absolute;top:0;bottom:0;background:var(--seg);border-left:1px solid var(--blur)}
+  .playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--playhead);box-shadow:0 0 8px var(--playhead)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .hidden{display:none}
+  .stat{font-size:24px;font-weight:800}
+  .badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--tag-bg);color:var(--muted)}
+  .flex-between{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  code{background:var(--input);padding:1px 5px;border-radius:5px;font-size:12px}
+  .poster{width:70px;border-radius:8px;background:var(--input)}
+  .stack{display:flex;flex-direction:column;gap:8px}
+  hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+  .warnbox{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-text);padding:10px 12px;border-radius:10px;font-size:13px}
+</style>
+</head>
+<body>
+<script>
+// Тема ставится до отрисовки страницы — иначе при загрузке мелькает не тот цвет.
+(function(){
+  try{
+    var t = localStorage.getItem('streamblur-theme') || 'auto';
+    if (t !== 'auto') document.documentElement.setAttribute('data-theme', t);
+  }catch(e){}
+})();
+</script>
+<header>
+  <div class="logo">Stream<span>Blur</span></div>
+  <div class="pills">
+    <span class="pill"><i class="dot" id="d-obs"></i><span id="t-obs">OBS: —</span></span>
+    <span class="pill"><i class="dot" id="d-clock"></i><span id="t-clock">Время: —</span></span>
+    <span class="pill"><i class="dot" id="d-blur"></i><span id="t-blur">Блюр: выкл</span></span>
+    <span class="pill" id="t-film">Фильм: не выбран</span>
+    <span class="pill" id="t-segs">Интервалов: 0</span>
+  </div>
+  <div style="margin-left:auto" class="row">
+    <span class="bigclock" id="clock">0:00:00</span>
+    <a id="repo-link" class="pill" href="#" target="_blank" rel="noreferrer"
+       style="text-decoration:none;display:none" title="Сообщить о проблеме / поддержать">
+      Проект и поддержка</a>
+    <label for="theme" style="margin:0">Тема</label>
+    <select id="theme" style="width:auto" title="Оформление панели">
+      <option value="auto">Авто (как в системе)</option>
+      <option value="dark">Тёмная</option>
+      <option value="light">Светлая</option>
+    </select>
+  </div>
+</header>
+
+<main>
+  <div id="blurbanner">🔞 БЛЮР АКТИВЕН — ЭКРАН ЗАКРЫТ</div>
+
+  <nav class="tabs">
+    <button data-tab="dash" class="active">Пульт</button>
+    <button data-tab="library">Библиотека</button>
+    <button data-tab="timings">Тайминги</button>
+    <button data-tab="clock">Синхронизация</button>
+    <button data-tab="settings">Настройки</button>
+    <button data-tab="safety">Страховка</button>
+    <button data-tab="demo">Демо</button>
+  </nav>
+
+  <!-- ============================== ПУЛЬТ -->
+  <section id="tab-dash" class="grid cols-2">
+    <div class="card">
+      <h2>Состояние защиты</h2>
+      <div class="kv">
+        <b>Фильм</b><span id="s-film">—</span>
+        <b>Позиция</b><span id="s-pos">0:00:00</span>
+        <b>Интервалов</b><span id="s-segs">0</span>
+        <b>Следующая сцена</b><span id="s-next">—</span>
+        <b>Источник времени</b><span id="s-clock">—</span>
+        <b>Уверенность</b><span id="s-conf">—</span>
+        <b>OBS</b><span id="s-obs">—</span>
+        <b>Причина блюра</b><span id="s-reason">—</span>
+      </div>
+      <hr>
+      <div class="row">
+        <button class="primary" id="b-test">Проверить блюр (2 с)</button>
+        <button id="b-blur-on">Включить блюр</button>
+        <button id="b-blur-off">Выключить блюр</button>
+        <button class="danger" id="b-panic2">PANIC</button>
+      </div>
+      <div class="hint">PANIC — мгновенно закрыть весь экран. Снимается только вручную.
+        Повесьте его на горячую клавишу OBS или стримдек.</div>
+    </div>
+
+    <div class="card">
+      <h2>Таймлайн фильма</h2>
+      <div class="timeline" id="timeline"><div class="playhead" id="playhead"></div></div>
+      <div class="hint" id="tl-hint">Загрузите фильм во вкладке «Библиотека».</div>
+      <h3>Журнал событий</h3>
+      <div class="log" id="events"></div>
+    </div>
+  </section>
+
+  <!-- ============================== БИБЛИОТЕКА -->
+  <section id="tab-library" class="grid cols-2 hidden">
+    <div class="card">
+      <h2>Поиск и добавление фильма</h2>
+      <div class="row">
+        <input id="f-query" placeholder="Название фильма" style="flex:1">
+        <input id="f-year" type="number" placeholder="Год" style="width:100px">
+        <button class="primary" id="b-search">Найти</button>
+      </div>
+      <div class="hint" id="search-hint">Нужен TMDB или OMDb ключ (вкладка «Настройки»). Без ключей добавляйте фильм вручную.</div>
+      <div id="search-results" style="margin-top:10px"></div>
+      <hr>
+      <h3>Добавить вручную</h3>
+      <label>Название</label><input id="m-title">
+      <div class="row">
+        <div style="flex:1"><label>Год</label><input id="m-year" type="number"></div>
+        <div style="flex:1"><label>Страна</label><input id="m-country"></div>
+        <div style="flex:1"><label>Хронометраж, мин</label><input id="m-runtime" type="number"></div>
+      </div>
+      <label>Студии (через запятую)</label><input id="m-studios" placeholder="A24, Plan B">
+      <label>Компании-производители</label><input id="m-companies">
+      <label>Жанры</label><input id="m-genres" placeholder="триллер, драма">
+      <label>IMDb ID / TMDB ID</label>
+      <div class="row">
+        <input id="m-imdb" placeholder="tt1234567"><input id="m-tmdb" type="number" placeholder="12345">
+      </div>
+      <div class="row" style="margin-top:12px"><button class="primary" id="b-add">Добавить в базу</button></div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between">
+        <h2>База фильмов</h2>
+        <input id="f-filter" placeholder="фильтр…" style="width:180px">
+      </div>
+      <table id="films-table">
+        <thead><tr><th>Фильм</th><th>Год</th><th>Студии / компании</th><th>Интервалы</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================== ТАЙМИНГИ -->
+  <section id="tab-timings" class="grid cols-2 hidden">
+    <div class="card">
+      <h2>Источник таймингов</h2>
+      <label>Провайдер</label>
+      <select id="p-select"></select>
+      <div class="hint" id="p-desc"></div>
+      <div id="p-fields"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="b-save-provider">Сохранить провайдера</button>
+        <button id="b-test-provider">Проверить</button>
+      </div>
+      <hr>
+      <h3>Автообновление</h3>
+      <div class="row">
+        <div style="flex:1">
+          <label>Периодичность</label>
+          <select id="s-interval">
+            <option value="off">Выключено</option>
+            <option value="daily">Раз в день</option>
+            <option value="weekly">Раз в неделю</option>
+            <option value="monthly">Раз в месяц</option>
+          </select>
+        </div>
+        <div><label>Время запуска</label><input id="s-attime" placeholder="04:00"></div>
+        <div><label>Язык таймингов</label><input id="s-language" placeholder="ru"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="b-save-sched">Сохранить</button>
+        <button id="b-sync-now">Обновить сейчас</button>
+      </div>
+      <div class="hint" id="sched-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Тайминги выбранного фильма</h2>
+      <div class="row">
+        <span class="muted" id="tm-film">фильм не выбран</span>
+        <button class="primary" id="b-sync-film">Подтянуть тайминги</button>
+      </div>
+      <table id="segs-table">
+        <thead><tr><th>Начало</th><th>Конец</th><th>Причина</th><th>Провайдер</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <h3>Добавить интервал вручную</h3>
+      <div class="row">
+        <input id="sg-start" placeholder="0:12:04" style="width:120px">
+        <input id="sg-end" placeholder="0:14:31" style="width:120px">
+        <input id="sg-reason" placeholder="причина" style="flex:1">
+        <button class="primary" id="b-add-seg">Добавить</button>
+      </div>
+      <h3>История синхронизаций</h3>
+      <div class="log" id="sync-log"></div>
+    </div>
+  </section>
+
+  <!-- ============================== СИНХРОНИЗАЦИЯ -->
+  <section id="tab-clock" class="grid cols-2 hidden">
+    <div class="card">
+      <h2>Откуда брать время фильма</h2>
+      <label>Источник</label>
+      <select id="c-source">
+        <option value="ocr">OCR — распознавать таймер с экрана (любой плеер)</option>
+        <option value="dom">Браузерный мост — точное video.currentTime</option>
+        <option value="manual">Вручную — хоткей «синхронизировать»</option>
+      </select>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="b-clock-start">Запустить</button>
+        <button id="b-clock-stop">Остановить</button>
+      </div>
+      <hr>
+      <h3>Ручная синхронизация</h3>
+      <div class="row">
+        <input id="c-position" placeholder="0:00:00 — сколько сейчас в фильме" style="flex:1">
+        <button class="ok" id="b-clock-sync">Синхронизировать</button>
+      </div>
+      <div class="hint">Совет: поставьте фильм на паузу, введите его время и нажмите кнопку.
+        Дальше StreamBlur сам досчитывает время между опросами.</div>
+      <hr>
+      <h3>Браузерный мост</h3>
+      <label>URL моста</label><input id="c-dom-url" placeholder="http://127.0.0.1:8799/time">
+      <div class="hint">Расширение лежит в <code>browser-extension/</code>; оно отдаёт
+        <code>{"position":1234.5,"paused":false}</code> для активного <code>&lt;video&gt;</code>.</div>
+    </div>
+
+    <div class="card">
+      <h2>Область с таймером (для OCR)</h2>
+      <div class="row">
+        <div><label>X</label><input id="o-left" type="number"></div>
+        <div><label>Y</label><input id="o-top" type="number"></div>
+        <div><label>Ширина</label><input id="o-width" type="number"></div>
+        <div><label>Высота</label><input id="o-height" type="number"></div>
+      </div>
+      <div class="row">
+        <div><label>Опрос, сек</label><input id="o-poll" type="number" step="0.1"></div>
+        <div><label>Увеличение</label><input id="o-upscale" type="number"></div>
+        <div><label>Порог OCR</label><input id="o-threshold" type="number" step="0.05"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="b-ocr-save">Сохранить область</button>
+        <button id="b-ocr-probe">Тест OCR</button>
+      </div>
+      <div class="hint">Оставьте 0×0 — будет захватываться весь экран (медленнее).
+        Лучше выделить узкую полоску там, где плеер рисует <code>0:12:34</code>.</div>
+      <div id="ocr-result" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- ============================== НАСТРОЙКИ -->
+  <section id="tab-settings" class="grid cols-2 hidden">
+    <div class="card">
+      <h2>OBS</h2>
+      <div class="row">
+        <div style="flex:2"><label>Хост</label><input id="ob-host"></div>
+        <div><label>Порт</label><input id="ob-port" type="number"></div>
+      </div>
+      <label>Пароль obs-websocket</label><input id="ob-pass" type="password">
+      <div class="row">
+        <div style="flex:1"><label>Сцена</label><input id="ob-scene" placeholder="(текущая)"></div>
+        <div style="flex:1"><label>Источник с фильмом</label><input id="ob-source"></div>
+      </div>
+      <label>Способ размытия</label>
+      <select id="ob-backend">
+        <option value="streamfx">StreamFX Blur (плагин StreamFX)</option>
+        <option value="move">Move Transition Blur (плагин obs-move-transition)</option>
+        <option value="obs-blur">obs-blur-filter</option>
+        <option value="source-toggle">Источник-заглушка поверх захвата (без плагинов)</option>
+        <option value="mock">Демо-режим (без OBS)</option>
+      </select>
+      <div class="row">
+        <div style="flex:1"><label>Имя фильтра</label><input id="ob-filter"></div>
+        <div style="flex:1"><label>Источник-заглушка</label><input id="ob-toggle"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="b-obs-save">Сохранить</button>
+        <button id="b-obs-connect">Подключить OBS</button>
+        <button id="b-obs-diag">Диагностика</button>
+      </div>
+      <pre class="log" id="obs-diag" style="white-space:pre-wrap"></pre>
+    </div>
+
+    <div class="card">
+      <h2>Движок и база фильмов</h2>
+      <div class="row">
+        <div><label>Pre-roll, с</label><input id="en-pre" type="number" step="0.1"></div>
+        <div><label>Post-roll, с</label><input id="en-post" type="number" step="0.1"></div>
+        <div><label>Опрос движка, с</label><input id="en-poll" type="number" step="0.01"></div>
+      </div>
+      <label>Если OBS отвалился во время опасной сцены</label>
+      <select id="en-failsafe">
+        <option value="blur">Считать аварийной и орать в UI</option>
+        <option value="ignore">Игнорировать</option>
+      </select>
+      <hr>
+      <h3>Карточки фильмов</h3>
+      <label>TMDB API-ключ</label><input id="fm-tmdb" type="password">
+      <div class="row">
+        <div style="flex:1"><label>Язык карточки</label><input id="fm-lang" placeholder="ru-RU"></div>
+        <div style="flex:1"><label>OMDb API-ключ</label><input id="fm-omdb" type="password"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="b-save-all">Сохранить всё</button>
+      </div>
+      <div class="hint">TMDB даёт год, студии, компании-производители, страну и жанры.
+        Ключ бесплатный: themoviedb.org/settings/api</div>
+    </div>
+  </section>
+
+  <!-- ============================== ДЕМО -->
+  <section id="tab-safety" class="grid cols-2 hidden">
+    <div class="card">
+      <h2>Нейросетевая страховка</h2>
+      <p class="muted">Смотрит на кадр и включает блюр, если увидела запрещённое на
+      выбранной платформе. Работает <b>поверх таймингов</b>, а не вместо них.</p>
+
+      <div class="warnbox" id="safety-warning" style="display:none"></div>
+
+      <div class="row" style="margin-top:10px">
+        <label style="display:flex;align-items:center;gap:8px;margin:0">
+          <input type="checkbox" id="safety-enabled" style="width:auto">
+          <span>Включить страховку</span>
+        </label>
+      </div>
+
+      <label>Правила какой платформы соблюдать</label>
+      <select id="safety-platform"></select>
+      <div class="muted" id="safety-reviewed" style="font-size:12px;margin-top:4px"></div>
+
+      <label>Порог уверенности для блюра</label>
+      <input type="number" id="safety-threshold" step="0.05" min="0" max="1" value="0">
+      <div class="muted" style="font-size:12px">0 = брать порог из профиля платформы.
+      Ниже порог — чаще блюр и меньше риск страйка.</div>
+
+      <label>Кадров в секунду</label>
+      <input type="number" id="safety-fps" step="0.5" min="0.5" max="10" value="2">
+      <div class="muted" style="font-size:12px">2–4 достаточно: сцена длится секунды.
+      Больше — зря грузит процессор.</div>
+
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="safety-save">Сохранить</button>
+        <button id="safety-check">Проверить кадр сейчас</button>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <label style="display:flex;align-items:center;gap:8px;margin:0">
+          <input type="checkbox" id="safety-testmode" style="width:auto">
+          <span>Режим проверки: писать в лог, но <b>не</b> блюрить</span>
+        </label>
+      </div>
+      <p class="muted" style="font-size:12px">Держите включённым, пока сами не
+      посмотрите срабатывания внизу. Нейросеть не отличает купальник от
+      откровенной сцены и кухонный нож от драки — поэтому решение за вами.</p>
+    </div>
+
+    <div class="card">
+      <h2>Что реально прикрыто</h2>
+      <div id="safety-covered" class="muted">—</div>
+
+      <h3>Модель</h3>
+      <div id="safety-model" class="muted">—</div>
+      <div class="row" style="margin-top:8px">
+        <code>python -m streamblur safety-models</code>
+      </div>
+      <div class="muted" style="font-size:12px">Веса модели не входят в установщик:
+      их нельзя распространять вместе с программой. Скачиваются один раз.</div>
+
+      <h3>Счётчики</h3>
+      <div class="row" id="safety-counters" style="gap:14px"></div>
+
+      <h3>Последние срабатывания</h3>
+      <div class="log" id="safety-log"><div class="muted">пока пусто</div></div>
+    </div>
+  </section>
+
+  <section id="tab-demo" class="grid cols-2 hidden">
+    <div class="card">
+      <h2>Демо без OBS</h2>
+      <p class="muted">Проверяет всю цепочку: мок-OBS (реальный obs-websocket протокол) →
+        движок → включение фильтра. Плюс «виртуальный плеер», который проигрывает
+        фильм с опасными сценами.</p>
+      <div class="row">
+        <button class="primary big" id="b-demo-start">▶ Запустить демо</button>
+        <button id="b-demo-stop">Остановить</button>
+        <button class="danger" id="b-demo-panic">PANIC</button>
+      </div>
+      <div class="hint" id="demo-status"></div>
+    </div>
+    <div class="card">
+      <h2>Что происходит</h2>
+      <div class="log" id="demo-log"></div>
+    </div>
+  </section>
+</main>
+
+<button id="panic">PANIC</button>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let state = {position:0, blur_on:false, panic:false, segments_total:0, film_title:'',
+             next_segment:null, clock:{}, blur:{}, events:[]};
+let films = [], selectedFilm = null, segments = [], providers = [], settings = {};
+
+/* ---------------------------------------------------------------- вкладки */
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.onclick = ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    ['dash','library','timings','clock','settings','safety','demo'].forEach(t=>{
+      $('tab-'+t).classList.toggle('hidden', t!==btn.dataset.tab);
+    });
+    if (btn.dataset.tab === 'safety') loadSafety();
+  };
+});
+
+/* ------------------------------------------------------------------ запросы */
+async function api(path, method='GET', body){
+  const res = await fetch(path, {method, headers:{'Content-Type':'application/json'},
+                                 body: body?JSON.stringify(body):undefined});
+  const text = await res.text();
+  let data = {};
+  try{ data = text?JSON.parse(text):{}; }catch(e){ data = {detail:text}; }
+  if(!res.ok) throw new Error(data.detail || res.statusText);
+  return data;
+}
+
+/* ------------------------------------------------------------------- рендер */
+function fmt(sec){
+  if(sec===null||sec===undefined) return '—';
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function render(){
+  const blurOn = state.blur_on;
+  $('blurbanner').classList.toggle('show', blurOn);
+  $('clock').textContent = fmt(state.position);
+  setDot('d-obs','t-obs', state.obs_connected, `OBS: ${state.obs_state||'—'}`);
+  setDot('d-clock','t-clock', state.clock_running,
+         `Время: ${state.clock.source||'—'}${state.clock.manual?' (ручное)':''}`);
+  setDot('d-blur','t-blur', blurOn, `Блюр: ${blurOn?'ВКЛ':'выкл'}`);
+  $('t-film').textContent = `Фильм: ${state.film_title||'не выбран'}`;
+  $('t-segs').textContent = `Интервалов: ${state.segments_total||0}`;
+  $('panic').classList.toggle('on', !!state.panic);
+  $('panic').textContent = state.panic ? 'СНЯТЬ PANIC' : 'PANIC';
+
+  $('s-film').textContent = state.film_title || '—';
+  $('s-pos').textContent = fmt(state.position);
+  $('s-segs').textContent = state.segments_total||0;
+  $('s-next').textContent = state.next_segment
+      ? `${fmt(state.next_segment.start)} — ${state.next_segment.reason||state.next_segment.kind}`
+      : '—';
+  $('s-clock').textContent = state.clock.source ? `${state.clock.source} (${fmt(state.clock.position)})` : '—';
+  $('s-conf').textContent = state.clock.confidence!==undefined ? state.clock.confidence.toFixed(2) : '—';
+  $('s-obs').textContent = state.obs_error || (state.obs_connected?'подключён':'не подключён');
+  $('s-reason').textContent = state.reason || '—';
+
+  renderTimeline();
+  renderEvents();
+  const demoEvents = (state.events||[]).filter(e=>e.kind==='demo'||e.kind==='engine'||e.kind==='sync');
+  $('demo-log').innerHTML = demoEvents.map(e=>
+    `<div><span class="tag ${e.kind==='engine'&&/blur_on|panic/.test(e.message||'')?'on':''}">${e.kind}</span> ${escapeHtml(e.message||'')}</div>`).join('')
+    || '<div class="muted">Нажмите «Запустить демо» — здесь появится лог переключений размытия.</div>';
+}
+
+function setDot(dotId, textId, ok, text){
+  $(dotId).className = 'dot ' + (ok?'ok':'bad');
+  $(textId).textContent = text;
+}
+
+function renderTimeline(){
+  const tl = $('timeline');
+  tl.querySelectorAll('.seg').forEach(n=>n.remove());
+  const ph = $('playhead');
+  if(!segments.length){ $('tl-hint').textContent='Нет интервалов — загрузите тайминги.'; ph.style.left='0%'; return; }
+  const end = Math.max(...segments.map(s=>s.end), state.position||0, 1);
+  segments.forEach(s=>{
+    const d = document.createElement('div');
+    d.className='seg';
+    d.style.left = (s.start/end*100)+'%';
+    d.style.width = Math.max(0.4,(s.end-s.start)/end*100)+'%';
+    d.title = `${fmt(s.start)}–${fmt(s.end)} ${s.reason||''}`;
+    tl.appendChild(d);
+  });
+  ph.style.left = Math.min(100, (state.position||0)/end*100)+'%';
+  $('tl-hint').textContent = `Всего под защитой: ${fmt(segments.reduce((a,s)=>a+(s.end-s.start),0))} из ${fmt(end)}`;
+}
+
+function renderEvents(){
+  const box = $('events');
+  const items = (state.events||[]);
+  box.innerHTML = items.map(e=>{
+    const cls = e.kind==='blur_on'?'on':(e.kind==='error'?'err':(e.kind==='blur_off'?'ok':''));
+    return `<div><span class="tag ${cls}">${e.kind}</span> <span class="muted">${e.time||''}</span> ${escapeHtml(e.message||'')}</div>`;
+  }).join('');
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* -------------------------------------------------------------- библиотека */
+async function loadFilms(){
+  const data = await api('/api/films?query='+encodeURIComponent($('f-filter').value||''));
+  films = data.films||[];
+  const tb = $('films-table').querySelector('tbody');
+  tb.innerHTML = films.map(f=>`
+    <tr>
+      <td><b>${escapeHtml(f.title)}</b>${f.original_title&&f.original_title!==f.title?`<div class="muted">${escapeHtml(f.original_title)}</div>`:''}</td>
+      <td>${f.year||'—'}</td>
+      <td>${[...(f.studios||[]),...(f.production_companies||[])].filter((v,i,a)=>a.indexOf(v)===i).slice(0,3).map(escapeHtml).join(', ')||'—'}
+          ${(f.country?`<div class="muted">${escapeHtml(f.country)}</div>`:'')}</td>
+      <td><span class="badge">${f.segments_count||0}</span></td>
+      <td class="row">
+        <button data-act="open" data-id="${f.id}">Открыть</button>
+        <button data-act="load" data-id="${f.id}">Защитить</button>
+        <button data-act="del" data-id="${f.id}" class="danger">×</button>
+      </td>
+    </tr>`).join('') || '<tr><td colspan="5" class="muted">База пуста</td></tr>';
+}
+$('films-table').onclick = async (e)=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  const id = +btn.dataset.id;
+  if(btn.dataset.act==='del'){ await api('/api/films/'+id,'DELETE'); loadFilms(); }
+  if(btn.dataset.act==='open'){ await openFilm(id); }
+  if(btn.dataset.act==='load'){
+    const s = await api('/api/engine/load','POST',{film_id:id});
+    state = {...state, ...s}; render();
+    alert('Фильм взят под защиту: '+s.segments_total+' интервалов');
+  }
+};
+$('f-filter').oninput = ()=>{ clearTimeout(window._ft); window._ft=setTimeout(loadFilms,250); };
+
+async function openFilm(id){
+  const f = await api('/api/films/'+id);
+  selectedFilm = f; segments = f.segments||[];
+  $('tm-film').textContent = `${f.title} (${f.year||'—'}) · ${f.studios?.length? f.studios.join(', '):'студия не указана'}`;
+  renderSegments(); renderTimeline();
+  document.querySelector('[data-tab="timings"]').click();
+}
+
+function renderSegments(){
+  const tb = $('segs-table').querySelector('tbody');
+  tb.innerHTML = segments.map(s=>`<tr>
+    <td>${fmt(s.start)}</td><td>${fmt(s.end)}</td>
+    <td>${escapeHtml(s.reason||s.kind)}</td><td class="muted">${escapeHtml(s.provider||'')}</td>
+    <td><button data-id="${s.id}" class="danger seg-del">×</button></td></tr>`).join('')
+    || '<tr><td colspan="5" class="muted">Нет интервалов</td></tr>';
+  tb.querySelectorAll('.seg-del').forEach(b=>b.onclick=async()=>{
+    await api('/api/segments/'+b.dataset.id,'DELETE');
+    if(selectedFilm) openFilm(selectedFilm.id);
+  });
+}
+
+$('b-search').onclick = async ()=>{
+  try{
+    const data = await api('/api/films/search','POST',{query:$('f-query').value, year:$('f-year').value||null});
+    $('search-hint').textContent = data.hint || `Найдено: ${(data.results||[]).length}`;
+    $('search-results').innerHTML = (data.results||[]).map(r=>`
+      <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
+        ${r.poster_url?`<img class="poster" src="${r.poster_url}">`:''}
+        <div style="flex:1"><b>${escapeHtml(r.title)}</b> <span class="muted">${r.year||''}</span>
+          <div class="muted">${escapeHtml((r.overview||'').slice(0,120))}</div></div>
+        <button class="primary imp" data-payload='${escapeHtml(JSON.stringify(r))}'>+ в базу</button>
+      </div>`).join('');
+    $('search-results').querySelectorAll('.imp').forEach(b=>b.onclick=async()=>{
+      await api('/api/films/import','POST',JSON.parse(b.dataset.payload)); loadFilms();
+    });
+  }catch(e){ $('search-hint').textContent = 'Ошибка: '+e.message; }
+};
+
+$('b-add').onclick = async ()=>{
+  try{
+    await api('/api/films','POST',{
+      title:$('m-title').value, year:+$('m-year').value||null,
+      country:$('m-country').value||null, runtime_minutes:+$('m-runtime').value||null,
+      studios:split($('m-studios').value), production_companies:split($('m-companies').value),
+      genres:split($('m-genres').value), imdb_id:$('m-imdb').value||null,
+      tmdb_id:+$('m-tmdb').value||null});
+    loadFilms();
+  }catch(e){ alert(e.message); }
+};
+const split = v => v? v.split(',').map(s=>s.trim()).filter(Boolean): null;
+
+/* ---------------------------------------------------------------- тайминги */
+async function loadProviders(){
+  const data = await api('/api/providers');
+  providers = data.providers||[];
+  $('p-select').innerHTML = providers.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+  $('p-select').onchange = renderProviderForm;
+  renderProviderForm();
+}
+function renderProviderForm(){
+  const p = providers.find(x=>x.id===$('p-select').value); if(!p) return;
+  $('p-desc').textContent = p.description||'';
+  const cfg = (settings.timings&&settings.timings.config)||{};
+  $('p-fields').innerHTML = (p.fields||[]).map(f=>`
+    <label>${escapeHtml(f.label)}</label>
+    ${f.type==='select'
+      ? `<select data-key="${f.key}">${(f.options||[]).map(o=>`<option value="${o.id}" ${String(cfg[f.key]??f.default)===o.id?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}</select>`
+      : `<${f.type==='textarea'?'textarea':'input'} data-key="${f.key}" type="${f.type==='textarea'?'text':(f.type||'text')}"
+           placeholder="${escapeHtml(f.placeholder||'')}" value="${escapeHtml(String(cfg[f.key]??f.default??''))}">${f.type==='textarea'?'</textarea>':''}`}
+    ${f.help?`<div class="hint">${escapeHtml(f.help)}</div>`:''}`).join('');
+}
+function readProviderForm(){
+  const out = {};
+  $('p-fields').querySelectorAll('[data-key]').forEach(el=>{ out[el.dataset.key]=el.value; });
+  return out;
+}
+$('b-save-provider').onclick = async ()=>{
+  settings = await api('/api/settings','POST',{patch:{timings:{provider:$('p-select').value, config:readProviderForm()}}});
+  alert('Провайдер сохранён');
+};
+$('b-test-provider').onclick = async ()=>{
+  try{
+    const r = await api(`/api/providers/${$('p-select').value}/test`,'POST',readProviderForm());
+    alert(r.ok? 'OK: '+r.message : 'Проблема: '+r.message);
+  }catch(e){ alert(e.message); }
+};
+$('b-sync-film').onclick = async ()=>{
+  if(!selectedFilm){ alert('Сначала откройте фильм в библиотеке'); return; }
+  const btn=$('b-sync-film'); btn.disabled=true; btn.textContent='Тянем…';
+  try{
+    const r = await api(`/api/films/${selectedFilm.id}/sync`,'POST',{});
+    alert(r.ok? `Готово: ${r.segments} интервалов. ${r.message||''}` : 'Ошибка: '+r.error);
+    openFilm(selectedFilm.id); loadSyncLog();
+  }catch(e){ alert(e.message); }
+  btn.disabled=false; btn.textContent='Подтянуть тайминги';
+};
+$('b-add-seg').onclick = async ()=>{
+  if(!selectedFilm){ alert('Сначала откройте фильм'); return; }
+  try{
+    await api(`/api/films/${selectedFilm.id}/segments`,'POST',{
+      start:$('sg-start').value, end:$('sg-end').value, reason:$('sg-reason').value||null});
+    openFilm(selectedFilm.id);
+  }catch(e){ alert(e.message); }
+};
+async function loadSyncLog(){
+  const d = await api('/api/sync/log');
+  $('sync-log').innerHTML = (d.log||[]).map(l=>
+    `<div><span class="tag ${l.status==='ok'?'ok':(l.status==='error'?'err':'')}">${l.status}</span>
+     <span class="muted">${(l.created_at||'').slice(0,19).replace('T',' ')}</span>
+     ${escapeHtml(l.provider)} → ${l.segments||0} · ${escapeHtml(l.message||'')}</div>`).join('');
+}
+$('b-save-sched').onclick = async ()=>{
+  settings = await api('/api/settings','POST',{patch:{timings:{
+    refresh_interval:$('s-interval').value, refresh_time:$('s-attime').value,
+    language:$('s-language').value}}});
+  alert('Сохранено');
+};
+$('b-sync-now').onclick = async ()=>{ const r = await api('/api/sync/run','POST',{}); alert(r.message); };
+
+/* ----------------------------------------------------------- синхронизация */
+$('b-clock-start').onclick = async ()=>{ try{ await api('/api/clock/start','POST',{source:$('c-source').value}); }catch(e){ alert(e.message);} };
+$('b-clock-stop').onclick  = async ()=>{ await api('/api/clock/stop','POST',{}); };
+$('b-clock-sync').onclick  = async ()=>{
+  try{ await api('/api/clock/sync','POST',{position:$('c-position').value}); }
+  catch(e){ alert(e.message); }
+};
+$('b-ocr-save').onclick = async ()=>{
+  settings = await api('/api/settings','POST',{patch:{clock:{
+    ocr:{left:+$('o-left').value,top:+$('o-top').value,width:+$('o-width').value,height:+$('o-height').value,
+         poll_seconds:+$('o-poll').value, upscale:+$('o-upscale').value, threshold:+$('o-threshold').value},
+    dom_url:$('c-dom-url').value}}});
+  alert('Область сохранена');
+};
+$('b-ocr-probe').onclick = async ()=>{
+  $('ocr-result').innerHTML = '<span class="muted">Снимаю кадр…</span>';
+  try{
+    const r = await api('/api/clock/ocr/probe','POST',{});
+    $('ocr-result').innerHTML = r.ok
+      ? `<div class="kv"><b>Текст</b><span><code>${escapeHtml(r.text||'(пусто)')}</code></span>
+         <b>Время</b><span>${fmt(r.position)}</span>
+         <b>Уверенность</b><span>${(r.confidence||0).toFixed(2)}</span></div>
+         ${r.preview?`<img src="${r.preview}" style="max-width:100%;margin-top:8px;border-radius:8px">`:''}`
+      : `<div class="warnbox">${escapeHtml(r.error||'не получилось')}</div>`;
+  }catch(e){ $('ocr-result').innerHTML = `<div class="warnbox">${escapeHtml(e.message)}</div>`; }
+};
+
+/* ---------------------------------------------------------------- настройки */
+function fillSettings(){
+  const o=settings.obs||{}, c=settings.clock||{}, oc=c.ocr||{}, e=settings.engine||{}, f=settings.films||{}, t=settings.timings||{};
+  $('ob-host').value=o.host||''; $('ob-port').value=o.port||4455; $('ob-pass').value=o.password||'';
+  $('ob-scene').value=o.scene||''; $('ob-source').value=o.source||''; $('ob-backend').value=o.backend||'streamfx';
+  $('ob-filter').value=o.filter_name||''; $('ob-toggle').value=o.toggle_source||'';
+  $('en-pre').value=c.pre_roll??0.6; $('en-post').value=c.post_roll??0.8; $('en-poll').value=e.poll_seconds??0.05;
+  $('en-failsafe').value=e.fail_safe||'blur';
+  $('fm-tmdb').value=f.tmdb_api_key||''; $('fm-lang').value=f.tmdb_language||'ru-RU'; $('fm-omdb').value=f.imdb_api_key||'';
+  $('s-interval').value=t.refresh_interval||'weekly'; $('s-attime').value=t.refresh_time||'04:00'; $('s-language').value=t.language||'ru';
+  $('c-source').value=c.source||'manual'; $('c-dom-url').value=c.dom_url||'';
+  $('o-left').value=oc.left||0; $('o-top').value=oc.top||0; $('o-width').value=oc.width||0; $('o-height').value=oc.height||0;
+  $('o-poll').value=oc.poll_seconds||0.5; $('o-upscale').value=oc.upscale||3; $('o-threshold').value=oc.threshold||0.62;
+  const p = providers.find(x=>x.id===(t.provider||'local-file'));
+  if(p){ $('p-select').value=p.id; renderProviderForm(); }
+}
+$('b-save-all').onclick = async ()=>{
+  settings = await api('/api/settings','POST',{patch:{
+    obs:{host:$('ob-host').value,port:+$('ob-port').value,password:$('ob-pass').value,
+         scene:$('ob-scene').value,source:$('ob-source').value,backend:$('ob-backend').value,
+         filter_name:$('ob-filter').value,toggle_source:$('ob-toggle').value},
+    engine:{pre_roll:+$('en-pre').value,post_roll:+$('en-post').value,
+            poll_seconds:+$('en-poll').value,fail_safe:$('en-failsafe').value},
+    films:{tmdb_api_key:$('fm-tmdb').value,tmdb_language:$('fm-lang').value,imdb_api_key:$('fm-omdb').value}
+  }});
+  alert('Сохранено');
+};
+$('b-obs-save').onclick = ()=>$('b-save-all').click();
+$('b-obs-connect').onclick = async ()=>{
+  try{ const r = await api('/api/obs/connect','POST',{}); alert(JSON.stringify(r,null,2)); }
+  catch(e){ alert(e.message); }
+};
+$('b-obs-diag').onclick = async ()=>{
+  $('obs-diag').textContent='Проверяю…';
+  const r = await api('/api/obs/diagnose');
+  $('obs-diag').textContent = JSON.stringify(r,null,2);
+};
+
+/* ------------------------------------------------------------------ пульт */
+$('b-test').onclick = ()=>api('/api/blur/test','POST',{seconds:2});
+$('b-blur-on').onclick = ()=>api('/api/blur','POST',{enabled:true});
+$('b-blur-off').onclick = ()=>api('/api/blur','POST',{enabled:false});
+const panicToggle = ()=>api('/api/panic','POST',{enabled:!state.panic});
+$('panic').onclick = panicToggle; $('b-panic2').onclick = panicToggle;
+
+/* ------------------------------------------------------------------- демо */
+$('b-demo-start').onclick = async ()=>{
+  $('demo-status').textContent='Запускаю…';
+  try{ const r = await api('/api/demo/start','POST',{}); $('demo-status').textContent=r.message||'демо идёт'; }
+  catch(e){ $('demo-status').textContent='Ошибка: '+e.message; }
+};
+$('b-demo-stop').onclick = async ()=>{
+  const r = await api('/api/demo/stop','POST',{}); $('demo-status').textContent=r.message||'остановлено';
+};
+$('b-demo-panic').onclick = ()=>api('/api/panic','POST',{enabled:!state.panic});
+
+/* --------------------------------------------------------------- websocket */
+let ws;
+function connect(){
+  const proto = location.protocol==='https:'?'wss':'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws.onmessage = (m)=>{
+    const data = JSON.parse(m.data);
+    if(data.type==='pong') return;
+    state = {...state, ...data};
+    if(data.scheduler){
+      const t = data.scheduler.timings||{};
+      $('sched-status').textContent = t.next_run
+        ? `Следующее автообновление: ${t.next_run.slice(0,16).replace('T',' ')} (запусков: ${t.runs||0})`
+        : 'Автообновление выключено';
+    }
+    render();
+  };
+  ws.onclose = ()=>setTimeout(connect, 1500);
+  ws.onerror = ()=>ws.close();
+}
+
+/* -------------------------------------------------------------------- init */
+(async ()=>{
+  settings = await api('/api/settings');
+  await Promise.all([loadProviders(), loadFilms(), loadSyncLog()]);
+  fillSettings();
+  connect();
+  render();
+})();
+
+/* ------------------------------------------------------------- страховка */
+let safetyProfiles = [];
+
+async function loadSafety(){
+  let data;
+  try { data = await api('/api/safety/status'); }
+  catch(e){ return; }
+  safetyProfiles = data.profiles || [];
+
+  const sel = $('safety-platform');
+  const current = sel.value;
+  sel.innerHTML = safetyProfiles.map(p=>
+    `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join('');
+  const settings = (state && state.settings && state.settings.safety) || {};
+  const active = safetyProfiles.find(p=>p.id===(settings.platform||'twitch')) || safetyProfiles[0];
+  sel.value = current || (active? active.id : '');
+
+  $('safety-enabled').checked = !!data.enabled;
+  $('safety-testmode').checked = data.test_mode !== false;
+  $('safety-threshold').value = (settings.blur_threshold!=null? settings.blur_threshold : 0);
+  $('safety-fps').value = (settings.fps!=null? settings.fps : 2);
+
+  const covered = (data.covered||[]).map(c=>`<div>✅ ${escapeHtml(c.label)}</div>`).join('');
+  const notCovered = (data.not_covered||[]).map(c=>`<div>⚠️ ${escapeHtml(c.label)} — <b>не распознаётся</b></div>`).join('');
+  $('safety-covered').innerHTML = (covered||'') + (notCovered||'')
+    || '<div class="muted">профиль ничего не включает</div>';
+
+  const warn = $('safety-warning');
+  if (data.not_covered && data.not_covered.length){
+    warn.style.display = '';
+    warn.textContent = 'Страховка НЕ закрывает всё: '
+      + data.not_covered.map(c=>c.label).join(', ')
+      + '. Основной защитой остаются тайминги.';
+  } else warn.style.display = 'none';
+
+  const rev = safetyProfiles.find(p=>p.id===sel.value);
+  $('safety-reviewed').textContent = rev && rev.last_reviewed
+    ? 'Профиль сверен с правилами: ' + rev.last_reviewed
+      + (rev.source_url ? ' — ' + rev.source_url : '')
+    : '';
+
+  const env = data.environment || {};
+  const catalog = (data.catalog && data.catalog.models) || [];
+  const rows = catalog.map(m=>{
+    const state = m.installed
+      ? (m.verified? '<span class="tag ok">установлена</span>'
+                   : '<span class="tag err">сумма не совпала</span>')
+      : '<span class="tag">нет</span>';
+    return `<div>${escapeHtml(m.filename)} ${state}
+      <span class="muted">${m.size_mb} МБ · ${escapeHtml(m.license)} · ${escapeHtml(m.category)}</span></div>`;
+  }).join('');
+  const missing = catalog.filter(m=>!m.installed).length;
+  $('safety-model').innerHTML =
+    (rows || '<div class="muted">каталог пуст</div>')
+    + `<div class="muted" style="margin-top:6px">Папка: <code>${escapeHtml(catalog && data.catalog? data.catalog.models_dir : (env.models_dir||''))}</code></div>`
+    + `<div class="muted">onnxruntime ${escapeHtml(env.onnxruntime||'—')}, `
+    + `исполнение: ${escapeHtml((env.providers||[]).join(', ')||'—')}</div>`
+    + (missing? `<div class="warnbox" style="margin-top:8px">Не хватает моделей: ${missing}. `
+      + 'Скачайте: <code>python -m streamblur safety-models --download</code></div>' : '');
+
+  $('safety-counters').innerHTML = [
+    ['Проверено кадров', data.frames_checked],
+    ['Срабатываний', data.detections_total],
+    ['Включено блюров', data.blurs_triggered],
+    ['Сейчас активна', data.active? 'да':'нет'],
+  ].map(([k,v])=>`<span class="badge">${k}: <b>${v==null?'—':v}</b></span>`).join('');
+
+  const log = $('safety-log');
+  log.innerHTML = (data.recent||[]).map(r=>{
+    const when = new Date(r.at*1000).toLocaleTimeString();
+    const what = r.test_mode? 'проверка' : 'БЛЮР';
+    return `<div>${when} · <span class="tag ${r.test_mode?'':'err'}">${what}</span> `
+         + `${escapeHtml(r.label||r.category)} · ${r.confidence} `
+         + `<span class="muted">(порог ${r.threshold})</span></div>`;
+  }).join('') || '<div class="muted">пока пусто</div>';
+}
+
+$('safety-save').onclick = async ()=>{
+  await api('/api/settings','POST',{patch:{safety:{
+    enabled: $('safety-enabled').checked,
+    platform: $('safety-platform').value,
+    blur_threshold: parseFloat($('safety-threshold').value)||0,
+    fps: parseFloat($('safety-fps').value)||2,
+    test_mode: $('safety-testmode').checked,
+  }}});
+  await loadSafety();
+};
+
+$('safety-testmode').onchange = async ()=>{
+  await api('/api/safety/test-mode','POST',{enabled:$('safety-testmode').checked});
+  await loadSafety();
+};
+
+$('safety-check').onclick = async (e)=>{
+  const btn = e.target;
+  btn.disabled = true; btn.textContent = 'Смотрю кадр…';
+  try{
+    const r = await api('/api/safety/check','POST',{});
+    if (!r.ok){ alert(r.error || 'Не получилось проверить кадр'); }
+    else if (!r.detections.length){ alert('Ничего подозрительного в кадре не найдено.'); }
+    else {
+      const list = r.detections.map(d=>
+        '· ' + d.label + ' — уверенность ' + d.confidence + ' (' + d.category + ')').join('\n');
+      alert('Найдено: ' + r.detections.length + '\n' + list + '\n\nПорог блюра: ' + r.threshold
+        + (r.test_mode? '\n\nРежим проверки: блюр НЕ включался.' : ''));
+    }
+  } catch(err){ alert(String(err)); }
+  btn.disabled = false; btn.textContent = 'Проверить кадр сейчас';
+  await loadSafety();
+};
+
+// Ссылка на проект берётся с сервера, чтобы не дублировать её в разметке.
+(async function(){
+  try{
+    const health = await api('/api/health');
+    const link = document.getElementById('repo-link');
+    if (link && health.repo_url && !/YOUR_NAME/.test(health.repo_url)){
+      link.href = health.repo_url;
+      link.style.display = '';
+    }
+  }catch(e){}
+})();
+
+// ------------------------------------------------------------- тема панели
+(function(){
+  var sel = document.getElementById('theme');
+  if (!sel) return;
+  var saved = 'auto';
+  try { saved = localStorage.getItem('streamblur-theme') || 'auto'; } catch(e){}
+  sel.value = saved;
+  sel.addEventListener('change', function(){
+    var value = sel.value;
+    if (value === 'auto') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', value);
+    }
+    try { localStorage.setItem('streamblur-theme', value); } catch(e){}
+  });
+})();
+</script>
+</body>
+</html>

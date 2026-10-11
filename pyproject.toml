@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "streamblur"
+version = "0.1.0"
+description = "Automatic full-screen blur of movies in OBS by timings (NSFW/violence guard for streamers)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-only" }
+classifiers = [
+  "License :: OSI Approved :: GNU Affero General Public License v3",
+]
+authors = [{ name = "StreamBlur" }]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "requests>=2.31",
+    "Jinja2>=3.1",
+    "mss>=9.0",
+    "numpy>=1.26",
+    "Pillow>=10.2",
+    "SQLAlchemy>=2.0",
+]
+
+[project.optional-dependencies]
+ocr = ["rapidocr-onnxruntime>=1.3"]
+dev = ["pytest>=8.0", "httpx>=0.27", "websockets>=12.0"]
+
+[project.scripts]
+streamblur = "streamblur.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["streamblur*"]
+
+[tool.setuptools.package-data]
+streamblur = ["web/**/*", "data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "slow: долгие тесты (загрузка OCR-моделей, реальное распознавание)",
+]

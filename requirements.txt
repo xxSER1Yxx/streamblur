@@ -1,0 +1,26 @@
+# --- ядро (обязательно) ---
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6
+requests>=2.31
+Jinja2>=3.1
+
+# --- захват экрана + OCR таймера ---
+mss>=9.0
+numpy>=1.26
+Pillow>=10.2
+# ВАЖНО: headless-сборка OpenCV должна ставиться ДО rapidocr, иначе pip подтянет
+# обычный opencv-python с GUI-библиотеками — это +90 МБ в EXE без всякой пользы
+# (мы не показываем окна OpenCV, только обрабатываем кадры).
+# rapidocr требует opencv>=4.5; ветку 4.x берём потому, что она проверена
+# с rapidocr 1.2.3 (на 5.x тесты тоже проходят, но это свежий мажор)
+opencv-python-headless>=4.8,<5
+rapidocr-onnxruntime>=1.3
+
+# --- база данных ---
+SQLAlchemy>=2.0
+
+# --- разработка / тесты ---
+pytest>=8.0
+httpx>=0.27
+websockets>=12.0

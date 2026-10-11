@@ -1,0 +1,145 @@
+{
+  "_comment": [
+    "Профили платформ: что именно запрещено и чем это детектируется.",
+    "Нейросеть НЕ читает правила — она распознаёт объекты и сцены. Здесь правила",
+    "вручную переведены в список категорий детектора и пороги. Правила платформ",
+    "меняются, поэтому профиль — это данные, а не код: правится без пересборки.",
+    "Важно понимать: детектор не отличает купальник от nudity-сцены и кухонный нож",
+    "от драки. Поэтому страховка работает поверх таймингов, а не вместо них.",
+    "last_reviewed — когда профиль сверяли с актуальными правилами платформы."
+  ],
+  "profiles": {
+    "twitch": {
+      "label": "Twitch",
+      "last_reviewed": "2026-10-10",
+      "source_url": "https://www.twitch.tv/p/legal/community-guidelines/",
+      "blur_threshold": 0.55,
+      "categories": {
+        "nudity": {
+          "enabled": true,
+          "note": "Нагота и сексуальный контент — основные причины банов."
+        },
+        "weapon": {
+          "enabled": true,
+          "note": "Реалистичное огнестрельное и холодное оружие в кадре."
+        },
+        "blood": {
+          "enabled": true,
+          "note": "Кровь и жестокость. Детектор ловит только явно видимое."
+        },
+        "self_harm": {
+          "enabled": false,
+          "note": "Требует отдельной модели, по предметам не детектируется."
+        },
+        "drugs": {
+          "enabled": false,
+          "note": "Требует отдельной модели."
+        }
+      }
+    },
+    "youtube": {
+      "label": "YouTube",
+      "last_reviewed": "2026-10-10",
+      "source_url": "https://www.youtube.com/howyoutubeworks/policies/community-guidelines/",
+      "blur_threshold": 0.55,
+      "categories": {
+        "nudity": {
+          "enabled": true,
+          "note": "Нагота и контент для взрослых."
+        },
+        "weapon": {
+          "enabled": true,
+          "note": "Огнестрельное оружие; YouTube строже к демонстрации без контекста."
+        },
+        "blood": {
+          "enabled": true,
+          "note": "Жестокие и шокирующие сцены."
+        },
+        "self_harm": {
+          "enabled": false,
+          "note": "Требует отдельной модели."
+        },
+        "drugs": {
+          "enabled": false,
+          "note": "Требует отдельной модели."
+        }
+      }
+    },
+    "kick": {
+      "label": "Kick",
+      "last_reviewed": "2026-10-10",
+      "source_url": "https://kick.com/legal/community-guidelines",
+      "blur_threshold": 0.55,
+      "categories": {
+        "nudity": {
+          "enabled": true,
+          "note": "Нагота запрещена."
+        },
+        "weapon": {
+          "enabled": true,
+          "note": "Реалистичное оружие."
+        },
+        "blood": {
+          "enabled": true,
+          "note": "Кровь и насилие."
+        },
+        "self_harm": {
+          "enabled": false,
+          "note": "Требует отдельной модели."
+        },
+        "drugs": {
+          "enabled": false,
+          "note": "Требует отдельной модели."
+        }
+      }
+    },
+    "paranoid": {
+      "label": "Параноик (блюрить всё подозрительное)",
+      "last_reviewed": "2026-10-10",
+      "source_url": "",
+      "blur_threshold": 0.4,
+      "categories": {
+        "nudity": {
+          "enabled": true,
+          "note": "Порог снижен: лучше лишний блюр, чем страйк."
+        },
+        "weapon": {
+          "enabled": true,
+          "note": "Порог снижен."
+        },
+        "blood": {
+          "enabled": true,
+          "note": "Порог снижен."
+        },
+        "self_harm": {
+          "enabled": false,
+          "note": "Требует отдельной модели."
+        },
+        "drugs": {
+          "enabled": false,
+          "note": "Требует отдельной модели."
+        }
+      }
+    },
+    "off": {
+      "label": "Страховка выключена",
+      "last_reviewed": "",
+      "source_url": "",
+      "blur_threshold": 1.01,
+      "categories": {
+        "nudity": {"enabled": false, "note": ""},
+        "weapon": {"enabled": false, "note": ""},
+        "blood": {"enabled": false, "note": ""},
+        "self_harm": {"enabled": false, "note": ""},
+        "drugs": {"enabled": false, "note": ""}
+      }
+    }
+  },
+  "categories": {
+    "nudity": "Нагота и откровенные сцены",
+    "weapon": "Оружие (нож, пистолет и т.п.)",
+    "blood": "Кровь и последствия насилия",
+    "self_harm": "Самоповреждение",
+    "drugs": "Наркотики и употребление"
+  }
+}

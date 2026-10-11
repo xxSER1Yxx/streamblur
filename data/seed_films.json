@@ -1,0 +1,22 @@
+{
+  "films": [
+    {
+      "title": "Пример: Ночной патруль",
+      "year": 2023,
+      "country": "США",
+      "studios": ["Example Pictures"],
+      "production_companies": ["Example Pictures", "Night Shift Films"],
+      "genres": ["триллер", "криминал"],
+      "runtime_minutes": 104
+    },
+    {
+      "title": "Пример: Тихая гавань",
+      "year": 2019,
+      "country": "Франция",
+      "studios": ["Maison Bleue"],
+      "production_companies": ["Maison Bleue", "Canal+"],
+      "genres": ["драма", "мелодрама"],
+      "runtime_minutes": 96
+    }
+  ]
+}
