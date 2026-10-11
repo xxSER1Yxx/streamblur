@@ -67,8 +67,16 @@ git push -u origin main
 1. <https://github.com/settings/tokens>
 2. **Generate new token → Generate new token (classic)**
 3. Note: `streamblur push` · Expiration: 90 дней
-4. Отметить **только** галочку `repo` (полный доступ к репозиториям)
+4. Отметить **две** галочки: `repo` **и** `workflow`
 5. **Generate token** → скопировать строку `ghp_...` — она показывается один раз
+
+> Право `workflow` обязательно: в проекте есть `.github/workflows/build.yml`
+> (автосборка `.exe`). Без него GitHub отклонит отправку с сообщением
+> `refusing to allow a Personal Access Token to create or update workflow`.
+> Это защита GitHub: токен без `workflow` не может запускать код на ваших мощностях.
+>
+> Токен показывается **только один раз**. Забыли скопировать — создавайте новый,
+> посмотреть его задним числом нельзя: GitHub хранит лишь хеш.
 
 **Как использовать:** когда git спросит пароль — вставить этот токен вместо
 пароля. Логин остаётся `xxSER1Yxx`.
@@ -129,5 +137,6 @@ git push
 | `remote origin already exists` | `git remote set-url origin АДРЕС` |
 | `failed to push some refs` | `git pull --rebase origin main`, потом `git push` |
 | `Authentication failed` | Пароль не годится, нужен токен (см. шаг 2) |
+| `refusing to allow a Personal Access Token to create or update workflow` | У токена нет права `workflow` — пересоздайте с галочками `repo` + `workflow` |
 | `File … is 120 MB; this exceeds the file size limit` | В репозиторий пытаются попасть веса: `git rm --cached` их |
 | Actions красные | Откройте неудачный run, смотрите шаг с ошибкой; чаще всего это отсутствующий секрет |

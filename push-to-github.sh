@@ -107,7 +107,9 @@ say "${B}[5/6] Проверяю доступ к GitHub…${N}"
 say "    Логин: ${REPO_OWNER}"
 say "    Пароль: ${B}вставьте токен${N} — обычный пароль от аккаунта не подойдёт."
 say "    Где взять токен: https://github.com/settings/tokens"
-say "    → Generate new token (classic) → отметьте ${B}repo${N} → скопируйте строку ghp_…"
+say "    → Generate new token (classic) → отметьте ${B}repo${N} и ${B}workflow${N},"
+say "      иначе GitHub отклонит файл автосборки .github/workflows/build.yml"
+say "    → скопируйте строку ghp_… (показывается один раз)"
 say ""
 printf "    Токен (при вводе не отображается): "
 
@@ -146,8 +148,14 @@ if [ "$status" -eq 0 ]; then
 else
   say ""
   warn "не отправилось (код $status). Частые причины:"
-  say "  • токен неверный или без права repo → создайте новый"
-  say "  • репозиторий не создан или называется не «${REPO_NAME}»"
-  say "  • на GitHub уже есть README → git pull --rebase origin main, затем заново"
+  if printf '%s' "$output" | grep -q "without .workflow. scope"; then
+    say "  ${B}• у токена нет права workflow${N} — без него GitHub не принимает"
+    say "    файл автосборки .github/workflows/build.yml."
+    say "    Пересоздайте токен с галочками ${B}repo${N} + ${B}workflow${N} и запустите заново."
+  else
+    say "  • токен неверный или без права repo → создайте новый"
+    say "  • репозиторий не создан или называется не «${REPO_NAME}»"
+    say "  • на GitHub уже есть README → git pull --rebase origin main, затем заново"
+  fi
   exit 1
 fi

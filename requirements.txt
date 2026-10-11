@@ -9,13 +9,16 @@ Jinja2>=3.1
 mss>=9.0
 numpy>=1.26
 Pillow>=10.2
-# ВАЖНО: headless-сборка OpenCV должна ставиться ДО rapidocr, иначе pip подтянет
-# обычный opencv-python с GUI-библиотеками — это +90 МБ в EXE без всякой пользы
-# (мы не показываем окна OpenCV, только обрабатываем кадры).
-# rapidocr требует opencv>=4.5; ветку 4.x берём потому, что она проверена
-# с rapidocr 1.2.3 (на 5.x тесты тоже проходят, но это свежий мажор)
+# ВАЖНО про OpenCV. Приём «поставить headless до rapidocr» НЕ работает: pip
+# ставит оба пакета за один проход по алфавиту, а rapidocr-onnxruntime тянет
+# обычный opencv-python (с Qt/GStreamer). Оба кладут модуль в один и тот же
+# site-packages/cv2, и вторая установка затирает первую — в EXE уезжает GUI-версия
+# с чужими DLL. Поэтому после установки зависимостей opencv-python удаляется,
+# а headless переустанавливается начисто — см. .github/workflows/build.yml.
+#
+# rapidocr: 1.2.3 — последняя версия с поддержкой Python 3.13, 1.4.x требует <3.13.
 opencv-python-headless>=4.8,<5
-rapidocr-onnxruntime>=1.3
+rapidocr-onnxruntime>=1.2.3
 
 # --- база данных ---
 SQLAlchemy>=2.0

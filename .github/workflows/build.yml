@@ -31,6 +31,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # rapidocr тянет opencv-python (GUI), который затирает cv2 от headless.
+          # Убираем его и ставим headless начисто — иначе в EXE попадают Qt/GStreamer DLL.
+          pip uninstall -y opencv-python
+          pip install --force-reinstall --no-deps "opencv-python-headless>=4.8,<5"
+          python -c "import cv2; print('cv2 из:', cv2.__file__)"
           pip install pytest
 
       - name: pytest
@@ -52,6 +57,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # rapidocr тянет opencv-python (GUI), который затирает cv2 от headless.
+          # Убираем его и ставим headless начисто — иначе в EXE попадают Qt/GStreamer DLL.
+          pip uninstall -y opencv-python
+          pip install --force-reinstall --no-deps "opencv-python-headless>=4.8,<5"
+          python -c "import cv2; print('cv2 из:', cv2.__file__)"
           pip install pyinstaller
 
       # Папка, а не один файл: старт мгновенный, без распаковки во временную папку.
@@ -61,11 +71,19 @@ jobs:
       - name: Проверка, что EXE вообще запускается
         shell: pwsh
         run: |
+          # PYTHONUNBUFFERED=1 — иначе при перенаправлении в файл вывод буферизуется
+          # и при жёстком падении хвост теряется: в логе остаются только первые строки.
+          $env:PYTHONUNBUFFERED = "1"
+          $env:PYTHONFAULTHANDLER = "1"
           $p = Start-Process -FilePath ".\dist\StreamBlur\StreamBlur.exe" -ArgumentList "doctor" `
                -NoNewWindow -PassThru -RedirectStandardOutput out.txt -RedirectStandardError err.txt
           $p.WaitForExit(120000) | Out-Null
-          Get-Content out.txt
-          if ($p.ExitCode -ne 0) { Get-Content err.txt; exit 1 }
+          Write-Host "--- код возврата: $($p.ExitCode) ---"
+          Write-Host "--- stdout ---"
+          if (Test-Path out.txt) { Get-Content out.txt }
+          Write-Host "--- stderr ---"
+          if (Test-Path err.txt) { Get-Content err.txt }
+          if ($p.ExitCode -ne 0) { exit 1 }
 
       - name: Версия из тега
         id: ver

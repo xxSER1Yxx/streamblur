@@ -466,6 +466,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Жёсткое падение в нативной библиотеке (onnxruntime, cv2, mss) убивает
+    # процесс без всякого traceback. faulthandler успевает напечатать, где именно
+    # это произошло, — без него в логе просто пусто и код возврата 1.
+    import faulthandler
+
+    faulthandler.enable()
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
