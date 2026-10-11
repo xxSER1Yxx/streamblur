@@ -22,3 +22,6 @@ data/settings.json
 data/models/
 *.onnx
 data/streamblur.db*
+# мусор от локальных проверок (перенаправление вывода при отладке)
+/out.txt
+/err.txt
