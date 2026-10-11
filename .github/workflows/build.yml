@@ -78,6 +78,10 @@ jobs:
             ForEach-Object { Write-Host ("  {0}  {1}" -f $_.Name, $_.Length) }
           $env:PYTHONUNBUFFERED = "1"
           $env:PYTHONFAULTHANDLER = "1"
+          # Без этого Python на Windows пишет в файл в cp1252, и первый же
+          # не-ASCII символ роняет print — в логе не остаётся даже traceback.
+          $env:PYTHONIOENCODING = "utf-8:replace"
+          $env:PYTHONUTF8 = "1"
           # cmd /c с перенаправлением в файлы переживает и аварийное завершение,
           # и отсутствие консоли у процесса — прямой вызов из pwsh в этом случае
           # не давал ни вывода, ни кода возврата.

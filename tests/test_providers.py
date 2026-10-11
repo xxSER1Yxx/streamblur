@@ -218,3 +218,29 @@ def test_hide_console_for_ui_is_safe_off_windows():
     from streamblur.__main__ import _hide_console_for_ui
 
     _hide_console_for_ui()          # не бросает исключение
+
+
+def test_output_survives_ascii_only_encoding():
+    """Вывод не должен падать, когда поток не понимает UTF-8.
+
+    На Windows при перенаправлении в файл Python берёт локальную кодировку
+    (cp1252). Первый же print с кириллицей или «→» бросал UnicodeEncodeError,
+    а traceback с кириллицей не мог напечататься в stderr — в логе не оставалось
+    вообще ничего, только код возврата 1. Так программа вела себя в CI.
+    """
+    import os
+    import subprocess
+    import sys
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    env = {**os.environ, "PYTHONIOENCODING": "ascii", "PYTHONDONTWRITEBYTECODE": "1"}
+    result = subprocess.run(
+        [sys.executable, "-m", "streamblur", "selftest"],
+        cwd=root, env=env, capture_output=True, timeout=180,
+    )
+    assert result.returncode == 0, (
+        f"selftest упал при ASCII-кодировке: {result.stderr.decode(errors='replace')[:400]}"
+    )
+    assert "selftest завершён" in result.stdout.decode(errors="replace"), (
+        "selftest не дошёл до конца — вывод обрывается на не-ASCII символе"
+    )

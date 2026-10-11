@@ -1,7 +1,7 @@
 """StreamBlur — автоблюр фильма в OBS по таймингам."""
 import os
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 # Страница проекта: куда писать о проблемах и где поддержать.
 # Адрес репозитория: https://github.com/xxSER1Yxx/streamblur

@@ -211,15 +211,15 @@ def cmd_selftest(_: argparse.Namespace) -> int:
     import traceback
 
     def step(label: str, func):
-        print(f"→ {label}", flush=True)
+        print(f"[..] {label}", flush=True)
         try:
             result = func()
         except BaseException:  # noqa: BLE001 — нужно увидеть даже SystemExit
-            print(f"✗ {label}: ошибка", flush=True)
+            print(f"[FAIL] {label}: ошибка", flush=True)
             traceback.print_exc(file=sys.stdout)
             sys.stdout.flush()
             return None
-        print(f"✓ {label}: {result}", flush=True)
+        print(f"[ok] {label}: {result}", flush=True)
         return result
 
     print(f"StreamBlur v{__version__} selftest", flush=True)
@@ -559,18 +559,25 @@ def build_parser() -> argparse.ArgumentParser:
 def _install_crash_diagnostics() -> None:
     """Сделать так, чтобы причина падения всегда оказывалась в логе.
 
-    Без этого при жёстком падении в нативной библиотеке (onnxruntime, cv2, mss)
-    процесс умирает молча: пустой stderr и код возврата 1 — и понять, что
-    случилось, невозможно. Именно так это выглядело в CI на Windows.
+    Две разные беды, которые выглядят одинаково — пустой stderr и код 1:
+
+    1. Кодировка. На Windows при перенаправлении вывода в файл Python берёт
+       локальную кодировку (cp1252), в которой нет ни «→», ни кириллицы. Первый
+       print с такими символами бросает UnicodeEncodeError, а traceback тоже
+       содержит кириллицу и тоже не печатается — в логе не остаётся ничего.
+       Поэтому вывод переводим в UTF-8 с заменой непечатаемого.
+    2. Жёсткое падение в нативной библиотеке (onnxruntime, cv2, mss) убивает
+       процесс без traceback — его ловит faulthandler.
     """
     import faulthandler
     import sys
 
-    try:
-        sys.stderr.reconfigure(line_buffering=True)
-        sys.stdout.reconfigure(line_buffering=True)
-    except Exception:  # noqa: BLE001 — не все потоки это умеют
-        pass
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace",
+                               line_buffering=True)
+        except Exception:  # noqa: BLE001 — не все потоки это умеют
+            pass
     # all_threads=True — дамп по всем потокам, а не только по упавшему.
     faulthandler.enable(file=sys.stderr, all_threads=True)
 
