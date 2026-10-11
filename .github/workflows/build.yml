@@ -71,16 +71,30 @@ jobs:
       - name: Проверка, что EXE вообще запускается
         shell: pwsh
         run: |
-          # Прямой вызов, а не Start-Process с перенаправлением в файлы:
-          # при аварийном завершении часть вывода в файлы не доезжала, и в логе
-          # оставались две строки вместо причины падения.
+          $exe = ".\dist\StreamBlur\StreamBlur.exe"
+          if (-not (Test-Path $exe)) { throw "EXE не найден: $exe" }
+          Write-Host "--- что лежит в dist ---"
+          Get-ChildItem ".\dist\StreamBlur" | Select-Object -First 8 |
+            ForEach-Object { Write-Host ("  {0}  {1}" -f $_.Name, $_.Length) }
           $env:PYTHONUNBUFFERED = "1"
           $env:PYTHONFAULTHANDLER = "1"
-          $out = & ".\dist\StreamBlur\StreamBlur.exe" doctor 2>&1
+          # cmd /c с перенаправлением в файлы переживает и аварийное завершение,
+          # и отсутствие консоли у процесса — прямой вызов из pwsh в этом случае
+          # не давал ни вывода, ни кода возврата.
+          cmd /c "`"$exe`" doctor > smoke_out.txt 2> smoke_err.txt"
           $code = $LASTEXITCODE
           Write-Host "--- код возврата: $code ---"
-          $out | ForEach-Object { Write-Host $_ }
+          Write-Host "--- stdout ---"
+          if (Test-Path smoke_out.txt) { Get-Content smoke_out.txt | ForEach-Object { Write-Host $_ } }
+          Write-Host "--- stderr ---"
+          if (Test-Path smoke_err.txt) { Get-Content smoke_err.txt | ForEach-Object { Write-Host $_ } }
           if ($code -ne 0) { exit 1 }
+          # Вывод обязан быть непустым: молчаливый EXE — это ровно тот баг,
+          # из-за которого console=False делал CLI-команды бесполезными.
+          if (-not (Test-Path smoke_out.txt) -or -not (Get-Content smoke_out.txt -Raw)) {
+            Write-Host "EXE завершился без вывода — консольного потока нет"
+            exit 1
+          }
 
       - name: Версия из тега
         id: ver

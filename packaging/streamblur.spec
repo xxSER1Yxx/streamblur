@@ -101,7 +101,12 @@ if ONEFILE:
         debug=False,
         strip=False,
         upx=False,                 # UPX ломает onnxruntime — не включаем
-        console=False,             # без чёрного окна: программа открывается в браузере
+        # console=True ОБЯЗАТЕЛЬНО. С console=False PyInstaller берёт бутлоадер
+        # runw.exe: у процесса нет stdout, и doctor / safety-check /
+        # safety-models молча не печатают ничего — инструмент личной проверки
+        # страховки в EXE оказывается нерабочим. Чёрное окно для команды ui
+        # прячется в рантайме (_hide_console_for_ui в streamblur/__main__.py).
+        console=True,
         icon=str(PKG / "assets" / "icon.ico") if (PKG / "assets" / "icon.ico").exists() else None,
         version=str(ROOT / "packaging" / "version_info.txt")
         if (ROOT / "packaging" / "version_info.txt").exists() else None,
@@ -115,7 +120,7 @@ else:
         debug=False,
         strip=False,
         upx=False,
-        console=False,
+        console=True,
         icon=str(PKG / "assets" / "icon.ico") if (PKG / "assets" / "icon.ico").exists() else None,
     )
     coll = COLLECT(

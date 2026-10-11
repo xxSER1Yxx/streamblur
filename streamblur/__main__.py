@@ -487,12 +487,45 @@ def _install_crash_diagnostics() -> None:
     faulthandler.enable(file=sys.stderr, all_threads=True)
 
 
+def _hide_console_for_ui() -> None:
+    """Спрятать чёрное окно консоли, когда запущена команда ui.
+
+    EXE собран с console=True — иначе у процесса нет stdout и все консольные
+    команды (doctor, safety-check, safety-models) молча не печатают ничего.
+    Но пользователю, который просто открывает программу, чёрное окно не нужно:
+    панель живёт в браузере. Поэтому окно прячем, а вывод остаётся.
+
+    Не прячем, если вывод перенаправлен в файл или конвейер: значит, программу
+    вызвали из терминала намеренно и человек хочет видеть, что она пишет.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+        handle = kernel32.GetStdHandle(-11)          # STD_OUTPUT_HANDLE
+        if not handle or handle == -1:               # вывода нет — прятать нечего
+            return
+        mode = ctypes.c_uint()
+        if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return                                   # живая консоль — это терминал
+        window = kernel32.GetConsoleWindow()
+        if window:
+            user32.ShowWindow(window, 0)             # SW_HIDE
+    except Exception:  # noqa: BLE001 — косметика не должна ронять программу
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     _install_crash_diagnostics()
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
         args = parser.parse_args([*(argv or []), "ui"])
+    if getattr(args, "command", None) == "ui":
+        _hide_console_for_ui()
     _configure_logging(args.verbose)
     return int(args.func(args) or 0)
 

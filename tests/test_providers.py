@@ -194,3 +194,27 @@ def test_pyinstaller_spec_bundles_every_data_file():
             f"streamblur/{relative} не упомянут в packaging/streamblur.spec — "
             "в собранном EXE этого файла не будет"
         )
+
+
+def test_spec_keeps_console_enabled():
+    """EXE обязан собираться с console=True.
+
+    С console=False PyInstaller берёт бутлоадер runw.exe, у процесса нет stdout,
+    и doctor / safety-check / safety-models молча не печатают ничего. Именно так
+    программа вела себя в Windows-сборке: смоук-тест падал без единой строчки лога.
+    """
+    import pathlib
+
+    spec = pathlib.Path(__file__).resolve().parent.parent / "packaging" / "streamblur.spec"
+    text = spec.read_text(encoding="utf-8")
+    assert "console=True" in text, "в spec должен быть console=True"
+    for line in text.splitlines():
+        code = line.split("#", 1)[0]
+        assert "console=False" not in code, "console=False возвращает нерабочий CLI"
+
+
+def test_hide_console_for_ui_is_safe_off_windows():
+    """На Linux/macOS функция обязана просто ничего не делать и не падать."""
+    from streamblur.__main__ import _hide_console_for_ui
+
+    _hide_console_for_ui()          # не бросает исключение
