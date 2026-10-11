@@ -81,7 +81,7 @@ jobs:
           # cmd /c с перенаправлением в файлы переживает и аварийное завершение,
           # и отсутствие консоли у процесса — прямой вызов из pwsh в этом случае
           # не давал ни вывода, ни кода возврата.
-          cmd /c "`"$exe`" doctor > smoke_out.txt 2> smoke_err.txt"
+          cmd /c "`"$exe`" selftest > smoke_out.txt 2> smoke_err.txt"
           $code = $LASTEXITCODE
           Write-Host "--- код возврата: $code ---"
           Write-Host "--- stdout ---"

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import threading
 from pathlib import Path
@@ -31,6 +32,14 @@ def _default_data_dir() -> Path:
     env = os.environ.get("STREAMBLUR_HOME")
     if env:
         return Path(env).expanduser()
+    if getattr(sys, "frozen", False):
+        # Установленная программа живёт в Program Files — туда без прав
+        # администратора не записать ни базу, ни настройки. Поэтому данные
+        # держим в профиле пользователя.
+        if sys.platform == "win32":
+            base = os.environ.get("LOCALAPPDATA") or str(Path.home())
+            return Path(base) / "StreamBlur"
+        return Path.home() / ".local" / "share" / "streamblur"
     return Path(__file__).resolve().parent.parent / "data"
 
 

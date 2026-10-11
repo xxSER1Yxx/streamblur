@@ -200,6 +200,91 @@ def cmd_films(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_selftest(_: argparse.Namespace) -> int:
+    """Пошаговая самодиагностика: что именно ломается и на каком шаге.
+
+    Нужна прежде всего для собранного EXE: когда программа умирает молча
+    (пустой stderr, код 1), обычный doctor не успевает ничего рассказать.
+    Здесь каждый шаг печатается немедленно и обернут в try/except, поэтому
+    последний напечатанный шаг и есть место поломки.
+    """
+    import traceback
+
+    def step(label: str, func):
+        print(f"→ {label}", flush=True)
+        try:
+            result = func()
+        except BaseException:  # noqa: BLE001 — нужно увидеть даже SystemExit
+            print(f"✗ {label}: ошибка", flush=True)
+            traceback.print_exc(file=sys.stdout)
+            sys.stdout.flush()
+            return None
+        print(f"✓ {label}: {result}", flush=True)
+        return result
+
+    print(f"StreamBlur v{__version__} selftest", flush=True)
+    step(f"python {sys.version.split()[0]} | frozen={getattr(sys, 'frozen', False)}",
+         lambda: sys.executable)
+    step("faulthandler", lambda: __import__("faulthandler").is_enabled())
+    step("numpy", lambda: __import__("numpy").__version__)
+    step("PIL", lambda: __import__("PIL").__version__)
+    step("cv2", lambda: __import__("cv2").__file__)
+    step("mss", lambda: __import__("mss").__version__)
+    step("onnxruntime", lambda: __import__("onnxruntime").__version__)
+    step("pydantic", lambda: __import__("pydantic").VERSION)
+    step("sqlalchemy", lambda: __import__("sqlalchemy").__version__)
+
+    def _settings():
+        from .config import SettingsStore
+
+        loaded = SettingsStore().load()
+        return f"данные={loaded.data_dir} база={loaded.db_path}"
+
+    step("настройки и папка данных", _settings)
+
+    def _database():
+        from .config import Settings
+        from .database import Database
+
+        return f"фильмов: {Database(Settings().db_path).count_films()}"
+
+    step("база данных", _database)
+
+    def _providers():
+        from .timings import list_providers
+
+        return ", ".join(p.id for p in list_providers())
+
+    step("провайдеры таймингов", _providers)
+
+    def _ocr():
+        from .clock.ocr_clock import _MSS_OK, _OCR_OK
+
+        return f"mss={'ok' if _MSS_OK else 'НЕТ'} OCR={'ok' if _OCR_OK else 'НЕТ'}"
+
+    step("захват экрана и OCR", _ocr)
+
+    def _safety():
+        from .safety import describe_environment
+
+        env = describe_environment()
+        return f"моделей: {len(env['model_files'])} | onnxruntime: {env.get('onnxruntime') or 'нет'}"
+
+    step("страховка", _safety)
+
+    def _obs():
+        from .config import Settings
+        from .obs.blur import BlurController
+
+        report = BlurController(Settings().obs).diagnose()
+        return "подключён" if report.get("ok") else f"нет связи: {report.get('error')}"
+
+    step("связь с OBS", _obs)
+
+    print("selftest завершён", flush=True)
+    return 0
+
+
 def cmd_doctor(_: argparse.Namespace) -> int:
     """Диагностика окружения: что установлено, что подключается."""
     from .clock.ocr_clock import _MSS_OK, _OCR_OK
@@ -463,6 +548,9 @@ def build_parser() -> argparse.ArgumentParser:
     films.add_argument("--companies")
     films.set_defaults(func=cmd_films)
 
+    selftest = sub.add_parser("selftest",
+                              help="пошаговая самодиагностика (что именно сломано)")
+    selftest.set_defaults(func=cmd_selftest)
     doctor = sub.add_parser("doctor", help="диагностика окружения")
     doctor.set_defaults(func=cmd_doctor)
     return parser
